@@ -1,186 +1,151 @@
-import React, { useEffect, useRef, useState } from "react";
-import axios from "axios";
-import { toast } from "react-toastify";
+import React, { useState, useRef, useEffect } from 'react';
+import axios from 'axios';
+import { toast } from 'react-toastify';
+import ReactMarkdown from 'react-markdown'; // Optional: npm install react-markdown
 
 function AiChat() {
-  const [messages, setMessages] = useState([]);
-  const [input, setInput] = useState("");
-  const [loading, setLoading] = useState(false);
-  const messagesEndRef = useRef(null);
+    const [messages, setMessages] = useState([]);
+    const [input, setInput] = useState('');
+    const [loading, setLoading] = useState(false);
+    const messagesEndRef = useRef(null);
 
-  const API_BASE = "http://localhost:8080";
+    const API_BASE = 'http://localhost:8080';
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
+    const getChatId = () => {
+        const username = localStorage.getItem('username') || 'anonymous';
+        return `web-session-${username}`;
+    };
 
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages, loading]);
+    const getEndpoint = () => {
+        const role = localStorage.getItem('role');
+        return role === 'ADMIN' ? `${API_BASE}/ai/admin/orchestrate` : `${API_BASE}/ai/orchestrate`;
+    };
 
-  const getEndpoint = () => {
-    const role = localStorage.getItem("role"); // "ADMIN" or "USER"
-    return role === "ADMIN"
-      ? `${API_BASE}/ai/admin/orchestrate`
-      : `${API_BASE}/ai/orchestrate`;
-  };
+    const scrollToBottom = () => {
+        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    };
 
-  const getChatId = () => {
-    const username = localStorage.getItem("username") || "anonymous";
-    // stable per user
-    return `web-session-${username}`;
-  };
+    useEffect(() => {
+        scrollToBottom();
+    }, [messages]);
 
-  const handleSend = async (e) => {
-    e.preventDefault();
-    const text = input.trim();
-    if (!text) return;
+    // Load History on Mount
+    useEffect(() => {
+        const loadHistory = async () => {
+            try {
+                const token = localStorage.getItem('token');
+                const chatId = getChatId();
+                if (!token) return;
 
-    const token = localStorage.getItem("token");
-    if (!token) {
-      toast.error("You are not logged in. Please login again.");
-      return;
-    }
+                const res = await axios.get(`${API_BASE}/ai/history?chatId=${chatId}`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
 
-    const userMsg = { role: "user", content: text };
-    setMessages((prev) => [...prev, userMsg]);
-    setInput("");
-    setLoading(true);
+                // Convert Spring AI messages to UI format
+                const history = res.data.map(msg => ({
+                    role: msg.messageType === 'USER' ? 'user' : 'ai',
+                    content: msg.content || msg.text || '' // Handle 1.1.2 structure
+                }));
 
-    try {
-      const url = getEndpoint();
-      const chatId = getChatId();
+                if (history.length > 0) {
+                    setMessages(history);
+                }
+            } catch (err) {
+                console.error("Failed to load history", err);
+            }
+        };
+        loadHistory();
+    }, []);
 
-      const res = await axios.post(
-        url,
-        {
-          message: text,
-          chatId: chatId,
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
+    const handleSend = async (e) => {
+        e.preventDefault();
+        if (!input.trim()) return;
+
+        const token = localStorage.getItem('token');
+        if (!token) {
+            toast.error("Please login first");
+            return;
         }
-      );
 
-      const aiMsg = { role: "ai", content: res.data };
-      setMessages((prev) => [...prev, aiMsg]);
-    } catch (err) {
-      const msg =
-        err?.response?.data?.message ||
-        err?.response?.data ||
-        err?.message ||
-        "Failed to get AI response";
-      toast.error(typeof msg === "string" ? msg : "Failed to get AI response");
-      setMessages((prev) => [
-        ...prev,
-        { role: "error", content: "Error: Could not connect to AI." },
-      ]);
-    } finally {
-      setLoading(false);
-    }
-  };
+        const userMsg = { role: 'user', content: input };
+        setMessages(prev => [...prev, userMsg]);
+        setInput('');
+        setLoading(true);
 
-  const username = localStorage.getItem("username");
-  const role = localStorage.getItem("role");
+        try {
+            const res = await axios.post(getEndpoint(), 
+                { 
+                    message: userMsg.content,
+                    chatId: getChatId() 
+                },
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
 
-  return (
-    <div className="container mt-4">
-      <div className="d-flex justify-content-between align-items-center mb-3">
-        <h2 className="mb-0">AI Assistant</h2>
+            const aiMsg = { role: 'ai', content: res.data };
+            setMessages(prev => [...prev, aiMsg]);
+        } catch (err) {
+            toast.error("Failed to get response");
+            setMessages(prev => [...prev, { role: 'error', content: "Error: Could not connect to AI." }]);
+        } finally {
+            setLoading(false);
+        }
+    };
 
-        <div className="text-end">
-          <div className="small text-muted">
-            Session: <span className="fw-semibold">{getChatId()}</span>
-          </div>
-          
-          
-        </div>
-      </div>
+    return (
+        <div className="container mt-4">
+            <h2 className="mb-4">🤖 AI Assistant</h2>
+            
+            <div className="card shadow-sm" style={{ height: '500px', display: 'flex', flexDirection: 'column' }}>
+                <div className="card-body" style={{ overflowY: 'auto', flex: 1, background: '#f8f9fa' }}>
+                    {messages.length === 0 && (
+                        <div className="text-center text-muted mt-5">
+                            <h4>How can I help you?</h4>
+                            <p>Try asking: "Find user Madan" or "What is the refund policy?"</p>
+                        </div>
+                    )}
+                    
+                    {messages.map((msg, index) => (
+                        <div key={index} className={`d-flex mb-3 ${msg.role === 'user' ? 'justify-content-end' : 'justify-content-start'}`}>
+                            <div className={`p-3 rounded-3 ${
+                                msg.role === 'user' ? 'bg-primary text-white' : 
+                                msg.role === 'error' ? 'bg-danger text-white' : 'bg-white border'
+                            }`} style={{ maxWidth: '75%', whiteSpace: 'pre-wrap' }}>
+                                <strong>{msg.role === 'user' ? 'You' : 'AI'}:</strong><br/>
+                                {/* Use Markdown or plain text */}
+                                {msg.role === 'ai' ? <ReactMarkdown>{msg.content}</ReactMarkdown> : msg.content}
+                            </div>
+                        </div>
+                    ))}
+                    
+                    {loading && (
+                        <div className="d-flex justify-content-start mb-3">
+                            <div className="bg-white border p-3 rounded-3">
+                                <span className="spinner-border spinner-border-sm text-primary me-2"></span>
+                                Thinking...
+                            </div>
+                        </div>
+                    )}
+                    <div ref={messagesEndRef} />
+                </div>
 
-      <div
-        className="card shadow-sm"
-        style={{ height: "520px", display: "flex", flexDirection: "column" }}
-      >
-        <div
-          className="card-body"
-          style={{ overflowY: "auto", flex: 1, background: "#f8f9fa" }}
-        >
-          {messages.length === 0 && (
-            <div className="text-center text-muted mt-5">
-              <h5>How can I help you?</h5>
-              <div className="mt-3">
-                <div>Try:</div>
-                <code>find user madan</code>
-                <br />
-                <code>analyse him</code>
-                <br />
-                <code>run a profile completeness check for all users</code>
-                <br />
-                <code>list all admins</code>
-              </div>
+                <div className="card-footer bg-white">
+                    <form onSubmit={handleSend} className="d-flex gap-2">
+                        <input 
+                            type="text" 
+                            className="form-control" 
+                            placeholder="Type a message..." 
+                            value={input}
+                            onChange={(e) => setInput(e.target.value)}
+                            disabled={loading}
+                        />
+                        <button type="submit" className="btn btn-primary" disabled={loading}>
+                            Send ➤
+                        </button>
+                    </form>
+                </div>
             </div>
-          )}
-
-          {messages.map((msg, idx) => (
-            <div
-              key={idx}
-              className={`d-flex mb-3 ${
-                msg.role === "user" ? "justify-content-end" : "justify-content-start"
-              }`}
-            >
-              <div
-                className={`p-3 rounded-3 ${
-                  msg.role === "user"
-                    ? "bg-primary text-white"
-                    : msg.role === "error"
-                    ? "bg-danger text-white"
-                    : "bg-white border"
-                }`}
-                style={{ maxWidth: "80%", whiteSpace: "pre-wrap" }}
-              >
-                <strong>{msg.role === "user" ? "You" : msg.role === "ai" ? "AI" : "Error"}:</strong>
-                <div style={{ marginTop: "6px" }}>{msg.content}</div>
-              </div>
-            </div>
-          ))}
-
-          {loading && (
-            <div className="d-flex justify-content-start mb-3">
-              <div className="bg-white border p-3 rounded-3">
-                <span className="spinner-border spinner-border-sm text-primary me-2"></span>
-                Thinking...
-              </div>
-            </div>
-          )}
-
-          <div ref={messagesEndRef} />
         </div>
-
-        <div className="card-footer bg-white">
-          <form onSubmit={handleSend} className="d-flex gap-2">
-            <input
-              type="text"
-              className="form-control"
-              placeholder="Type a message..."
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              disabled={loading}
-            />
-            <button type="submit" className="btn btn-primary" disabled={loading}>
-              Send
-            </button>
-          </form>
-
-          <div className="mt-2 small text-muted">
-            Note: USER uses read-only orchestrator. ADMIN uses admin orchestrator.
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+    );
 }
 
 export default AiChat;

@@ -58,11 +58,14 @@ function Navbar() {
 
                                 {/* Admin-only link */}
                                 {isAdmin() && (
-                                    <li className="nav-item">
-                                        <Link className={isActive('/approvals')} to="/approvals">
-                                            Approvals
-                                        </Link>
-                                    </li>
+                                    <>
+                                        <li className="nav-item">
+                                            <Link className={isActive('/approvals')} to="/approvals">Approvals</Link>
+                                        </li>
+                                        <li className="nav-item">
+                                            <Link className={isActive('/knowledge')} to="/knowledge">Knowledge</Link>
+                                        </li>
+                                    </>
                                 )}
                                 {isAdmin() && (
                                     <li className="nav-item">

@@ -12,6 +12,7 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import AiChat from './pages/AiChat';
 import Approvals from './pages/Approvals';
+import KnowledgeBase from './pages/KnowledgeBase';
 
 // Protected Route — redirects to login if not logged in
 function ProtectedRoute({ children }) {
@@ -113,6 +114,7 @@ function AppRoutes() {
           </AdminRoute>
         }
       />
+      <Route path="/knowledge" element={<AdminRoute><KnowledgeBase /></AdminRoute>} />
 
 
       {/* Fallback: any unknown route → go home */}

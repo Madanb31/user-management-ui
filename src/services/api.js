@@ -47,3 +47,7 @@ export const approveHitlAction = (id, reason = "") =>
 
 export const rejectHitlAction = (id, reason = "") =>
   API.post(`/hitl/actions/${id}/reject`, reason ? { reason } : {});
+
+
+//chat memory
+export const getChatHistory = (chatId) => API.get(`/ai/history?chatId=${chatId}`);
